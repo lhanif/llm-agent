@@ -41,6 +41,92 @@ def normalize_question(q):
         normalized["options"] = ["Tidak ada opsi A", "Tidak ada opsi B", "Tidak ada opsi C", "Tidak ada opsi D"]
     return normalized
 
+async def match_or_create_topic(new_topic: str, current_difficulty: str):
+    """Mencocokkan topik baru dengan topik yang sudah ada dengan tingkat kesulitan yang sama."""
+    
+    new_topic = new_topic.lower()
+    
+    try:
+        # HANYA ambil topik yang memiliki tingkat kesulitan yang sama
+        res = supabase.table("performance_summary").select("topic").eq("difficulty", current_difficulty).execute()
+        existing_topics = list(set([row['topic'] for row in res.data]))
+    except Exception as e:
+        print(f"❌ Error fetching existing topics with difficulty {current_difficulty}: {e}")
+        existing_topics = []
+
+    if not existing_topics or new_topic in existing_topics:
+        return new_topic
+
+    topic_list = ", ".join(existing_topics)
+    
+    prompt = f"""
+    Anda adalah penormalisasi topik. Tugas Anda adalah mencocokkan Topik Baru dengan salah satu Topik yang Sudah Ada, MENGINGAT KESULITANNYA SAMA.
+    Jika ada kecocokan yang kuat, kembalikan Topik yang Sudah Ada tersebut. Jika tidak ada kecocokan, kembalikan Topik Baru.
+    
+    Kesulitan Saat Ini: {current_difficulty}
+    Topik Baru: "{new_topic}"
+    Topik yang Sudah Ada dengan Kesulitan SAMA: {topic_list}
+    
+    Tentukan Topik yang Sudah Ada mana yang paling sesuai. Jika tidak ada yang cocok, kembalikan Topik Baru.
+    
+    Formatkan respons Anda **HANYA dalam JSON OBJECT** seperti ini tanpa teks tambahan:
+    {{"matched_topic": "hasil topik yang dipilih (dari daftar atau topik baru)"}}
+    """
+    
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile", 
+            response_format={"type": "json_object"}
+        )
+        result_text = chat_completion.choices[0].message.content.strip()
+        result_text = result_text.strip('`').strip()
+        if result_text.lower().startswith("json"):
+            result_text = result_text[4:].strip()
+            
+        data = json.loads(result_text.replace("'", '"'))
+        matched_topic = data.get("matched_topic", new_topic).lower()
+        
+        if matched_topic in existing_topics:
+            return matched_topic
+        else:
+            return new_topic
+
+    except Exception as e:
+        print(f"❌ Error matching topic: {e}")
+        return new_topic
+
+
+async def generate_performance_suggestion(performance_data: list):
+    """Menggunakan Groq untuk menganalisis dan memberikan saran dari data performa."""
+    
+    data_string = "\n".join([
+        f"Topik: {d['topic']}, Kesulitan: {d['difficulty']}, Akurasi: {d['avg_score']:.2f}%, Total Soal: {d['total_questions']}"
+        for d in performance_data
+    ])
+    
+    prompt = f"""
+    Analisis data performa kuis Anda berikut dan berikan ringkasan dan 3 saran spesifik untuk peningkatan. **Gunakan kata 'Anda' dan nada bicara yang personal dan langsung saat memberikan saran.**
+
+    Data Performa:
+    ---
+    {data_string}
+    ---
+
+    Formatkan respons Anda **HANYA** dalam format Markdown, dimulai dengan heading '## 🎯 Ringkasan & Saran Belajar'. Jangan sertakan data mentah.
+    """
+
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+        )
+        return chat_completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ Error generating suggestion: {e}")
+        return "\n---\n## ⚠️ Analisis Gagal\nGagal mendapatkan saran dari AI. Coba lagi nanti."
+
+
 async def generate_soal(full_prompt: str):
     """Menggunakan Groq untuk mengekstrak metadata dan menghasilkan soal dalam satu panggilan API."""
     prompt = f"""
@@ -84,7 +170,7 @@ async def generate_soal(full_prompt: str):
         # Ekstrak data yang dibutuhkan
         topic_keyword = data.get("topic", "Topik Umum")
         extracted_difficulty = data.get("difficulty", "sedang").lower()
-        extracted_jumlah_soal = int(data.get("jumlah_soal", 5)) # Pastikan integer
+        extracted_jumlah_soal = int(data.get("jumlah_soal", 5))
         soal_list = data.get("questions", [])
         
         valid_soal = [normalize_question(s) for s in soal_list]
@@ -121,10 +207,11 @@ async def quiz(interaction: discord.Interaction, prompt: str):
     topic_keyword, difficulty, jumlah_soal, questions = await generate_soal(prompt)
     
     if not questions or len(questions) == 0:
-        await interaction.followup.send(f"❌ Gagal membuat soal dari prompt Anda: *{prompt}*. Coba lagi dengan format yang lebih jelas (misal: 'kuis materi integral kesulitan mudah jumlah 3').")
+        await interaction.followup.send(f"❌ Gagal membuat soal dari prompt Anda: *{prompt}*. Coba lagi dengan format yang lebih jelas.")
         return
         
-    # Sesuaikan jumlah soal yang disimpan berdasarkan jumlah soal yang benar-benar dibuat
+    # Normalisasi dan Pencocokan Topik
+    topic_to_save = await match_or_create_topic(topic_keyword, difficulty)
     jumlah_soal_sebenarnya = len(questions)
         
     # --- Simpan Sesi ---
@@ -132,7 +219,7 @@ async def quiz(interaction: discord.Interaction, prompt: str):
     supabase.table("quiz_sessions").insert({
         "id": session_id,
         "user_id": user_id,
-        "topic": topic_keyword, 
+        "topic": topic_to_save, 
         "difficulty": difficulty,
         "total_questions": jumlah_soal_sebenarnya
     }).execute()
@@ -145,7 +232,7 @@ async def quiz(interaction: discord.Interaction, prompt: str):
         
         supabase.table("questions").insert({
             "id": qid,
-            "topic": topic_keyword,
+            "topic": topic_to_save,
             "difficulty": difficulty,
             "question_text": q["question"],
             "correct_answer": q["answer"],
@@ -153,7 +240,6 @@ async def quiz(interaction: discord.Interaction, prompt: str):
         }).execute()
         
         # 2. Simpan ke tabel quiz_questions dan ambil ID yang baru di-generate
-        # FIX KOMPATIBILITAS: Hapus .select("id") untuk menghindari AttributeError
         result_quiz_q = supabase.table("quiz_questions").insert({
             "session_id": session_id,
             "question_id": qid,
@@ -165,28 +251,26 @@ async def quiz(interaction: discord.Interaction, prompt: str):
             qq_id = result_quiz_q.data[0]["id"]
             quiz_question_ids.append(qq_id)
         else:
-            # Jika ini terjadi, artinya insert berhasil tapi ID tidak dikembalikan.
-            # INI ADALAH TITIK KEGAGALAN JIKA LIBRARY TERLALU LAMA.
-            print(f"❌ Gagal mendapatkan ID quiz_questions untuk soal {i+1}. Coba upgrade postgrest-py.")
-            await interaction.followup.send("❌ Kesalahan fatal (DB-ID). Silakan coba lagi atau upgrade library Supabase/PostgREST Anda.")
+            await interaction.followup.send("❌ Kesalahan fatal (DB-ID). Silakan coba lagi.")
             return
 
-    # --- Simpan ke cache bot ---
+    # Simpan ke cache bot
     active_sessions[user_id] = {
         "session_id": session_id,
         "questions": questions,
         "quiz_question_ids": quiz_question_ids, 
-        "topic": topic_keyword,
+        "topic": topic_to_save,
         "difficulty": difficulty,
         "current": 0,
         "score": 0,
-        "start_time": datetime.datetime.now()
+        "start_time": datetime.datetime.now(),
+        "question_start_time": datetime.datetime.now()
     }
 
     first_question = questions[0]
     options_text = "\n".join([f"{chr(65+i)}. {opt}" for i, opt in enumerate(first_question["options"])])
     await interaction.followup.send(
-        f"🎯 **Kuis Dimulai!**\nTopik: **{topic_keyword}**\nKesulitan: **{difficulty.upper()}**\nJumlah Soal: **{jumlah_soal_sebenarnya}**\n\n"
+        f"🎯 **Kuis Dimulai!**\nTopik: **{topic_to_save.title()}**\nKesulitan: **{difficulty.upper()}**\nJumlah Soal: **{jumlah_soal_sebenarnya}**\n\n"
         f"**Pertanyaan 1:** {first_question['question']}\n\n{options_text}\n\n"
         f"Balas dengan `/answer <huruf>` untuk menjawab."
     )
@@ -207,7 +291,10 @@ async def answer(interaction: discord.Interaction, pilihan: str):
 
     benar = (pilihan.upper() == q["answer"].upper())
     session["score"] += 1 if benar else 0
-    durasi = (datetime.datetime.now() - session["start_time"]).total_seconds()
+    
+    # Selisih waktu pengerjaan per soal
+    end_time = datetime.datetime.now()
+    durasi = (end_time - session["question_start_time"]).total_seconds() 
 
     # Simpan jawaban ke DB
     supabase.table("quiz_answers").insert({
@@ -219,8 +306,8 @@ async def answer(interaction: discord.Interaction, pilihan: str):
     }).execute()
 
     # Update performance_summary
-    topic_prompt = session["topic"]
-    perf = supabase.table("performance_summary").select("*").eq("user_id", user_id).eq("topic", topic_prompt).execute()
+    topic_prompt_normalized = session["topic"] 
+    perf = supabase.table("performance_summary").select("*").eq("user_id", user_id).eq("topic", topic_prompt_normalized).execute()
     
     if perf.data:
         data = perf.data[0]
@@ -236,7 +323,7 @@ async def answer(interaction: discord.Interaction, pilihan: str):
     else:
         supabase.table("performance_summary").insert({
             "user_id": user_id,
-            "topic": topic_prompt,
+            "topic": topic_prompt_normalized,
             "difficulty": session["difficulty"],
             "total_sessions": 1,
             "total_questions": 1,
@@ -251,6 +338,9 @@ async def answer(interaction: discord.Interaction, pilihan: str):
     # Pindah ke soal berikutnya
     session["current"] += 1
     if session["current"] < len(questions):
+        # MENCATAT WAKTU MULAI SOAL BERIKUTNYA
+        session["question_start_time"] = datetime.datetime.now() 
+
         next_q = questions[session["current"]]
         options_text = "\n".join([f"{chr(65+i)}. {opt}" for i, opt in enumerate(next_q["options"])])
         await interaction.followup.send(
@@ -258,24 +348,53 @@ async def answer(interaction: discord.Interaction, pilihan: str):
             f"Balas dengan `/answer <huruf>` untuk menjawab."
         )
     else:
-        await interaction.followup.send(f"🎉 **Kuis selesai!** Skor kamu: **{session['score']}/{len(questions)}**")
+        # LOGIKA PERHITUNGAN WAKTU KUIS SELESAI
+        end_time = datetime.datetime.now()
+        total_duration = (end_time - session["start_time"]).total_seconds()
+        
+        # Hitung persentase skor
+        percentage_score = (session['score'] / len(questions)) * 100 
+        
+        # Hitung durasi rata-rata per soal
+        avg_duration_per_q = total_duration / len(questions)
+        
+        # Format durasi total
+        total_duration_formatted = str(datetime.timedelta(seconds=round(total_duration)))
+
+        await interaction.followup.send(
+            f"🎉 **Kuis selesai!**\n"
+            f"✅ **Skor Kamu:** {session['score']}/{len(questions)} (**{percentage_score:.2f}%**)\n"
+            f"⏱️ **Waktu Total:** {total_duration_formatted}\n"
+            f"⏳ **Rata-rata Waktu/Soal:** {avg_duration_per_q:.2f} detik"
+        )
         del active_sessions[user_id]
 
-@bot.tree.command(name="performance", description="Lihat performa kamu")
+@bot.tree.command(name="performance", description="Lihat performa kamu dan dapatkan saran belajar")
 async def performance(interaction: discord.Interaction):
+    await interaction.response.defer()
     user_id = str(interaction.user.id)
     res = supabase.table("performance_summary").select("*").eq("user_id", user_id).execute()
+    
     if not res.data:
-        await interaction.response.send_message("📊 Belum ada data performa.")
+        await interaction.followup.send("📊 Belum ada data performa.")
         return
 
-    text = "📈 **Performa Kamu:**\n"
+    # 1. Buat teks data performa (Hanya Data Ringkas)
+    data_text = "📈 **Performa Kamu:**\n"
     for row in res.data:
-        text += f"---"
-        text += f"🧩 Topik: **{row['topic']}** (Kesulitan: {row['difficulty']})\n"
-        text += f"⭐ Akurasi: **{row['avg_score']:.2f}%** ({row['total_correct']}/{row['total_questions']} Benar)\n"
-        text += f"📅 Terakhir diperbarui: {row['last_updated']}\n"
-    await interaction.response.send_message(text)
+        data_text += f"---\n"
+        data_text += f"🧩 Topik: **{row['topic'].title()}** (Kesulitan: {row['difficulty']})\n" 
+        data_text += f"⭐ Akurasi: **{row['avg_score']:.2f}%** ({row['total_correct']}/{row['total_questions']} Benar)\n"
+        data_text += f"📅 Terakhir diperbarui: {row['last_updated'][:10]}\n"
+    
+    # 2. Generasi ringkasan dan saran (Ini yang panjang)
+    suggestion_text = await generate_performance_suggestion(res.data)
+
+    # 3. KIRIM PESAN PERTAMA: Data Performa
+    await interaction.followup.send(data_text)
+
+    # 4. KIRIM PESAN KEDUA: Saran dari AI
+    await interaction.followup.send(suggestion_text)
 
 # ------------------------------------------------------------
 # Jalankan bot
