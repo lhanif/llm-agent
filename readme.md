@@ -54,8 +54,7 @@ Buat `.env` dari `.env.example` dan isi variabel berikut:
 - DISCORD_TOKEN — Token bot Discord Anda
 - SUPABASE_URL — URL project Supabase
 - SUPABASE_KEY — Service key Supabase (atau anon key untuk akses terbatas)
-- OPENAI_API_KEY — API key untuk provider AI (jika digunakan)
-- WHATSAPP_INTEGRATION — Placeholder (lihat bagian WhatsApp di bawah)
+- GROQ_API_KEY — API key untuk provider AI 
 
 File `.env.example` sudah tersedia sebagai template.
 

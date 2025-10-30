@@ -27,6 +27,8 @@ def mock_discord_channel():
     channel.send = AsyncMock()
     return channel
 
+
+
 @pytest.fixture
 def sample_quiz_questions():
     """Return sample quiz questions for testing."""
