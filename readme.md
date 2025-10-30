@@ -1,4 +1,3 @@
-
 ## Ilham : Personal Learning Assistant
 
 Eduardus Bagus Wicaksono (22/493128/TK/53996)
@@ -72,11 +71,7 @@ SUPABASE_URL=https://url-supabase-anda.supabase.co
 SUPABASE_KEY=service-key-supabase-anda
 
 # Provider AI (OpenAI / lainnya)
-OPENAI_API_KEY=api-key-openai-anda
-
-# WhatsApp / Integrasi pihak ketiga (opsional)
-WHATSAPP_URL=placeholder-url-whatsapp
-WHATSAPP_API_KEY=placeholder-api-key-whatsapp
+GROQ_API_KEY=api-key-openai-anda
 ```
 
 ## Daftar Perintah (/ilham)
@@ -115,19 +110,11 @@ Catatan:
 - Bot menggunakan decorator (`ensure_user_registered`) untuk memastikan user terdaftar di database secara otomatis.
 - Lihat `quiz_bot/commands.py` untuk detail format pesan dan alur.
 
-## Demo / Screenshot
+## Arsitektur Sistem
 
-Sertakan GIF atau screenshot interaksi (pembuatan kuis, menjawab, dan alur rencana belajar). Ganti placeholder di bawah dengan media Anda.
+![Arsitektur placeholder](assets\image.png)
 
-![Demo placeholder](./assets/demo-placeholder.png)
 
-Proses QR-code WhatsApp (jika integrasi via library/Twilio):
-
-1. Gunakan library/layanan WhatsApp yang mendukung autentikasi berbasis sesi (misal, client headless yang mencetak QR code ke terminal atau mengembalikan URL gambar QR).
-2. Saat inisialisasi, scan QR code dengan aplikasi WhatsApp di ponsel untuk menghubungkan sesi.
-3. Simpan token sesi dengan aman (jangan commit ke repo). Tambahkan key/URL WhatsApp ke `.env`.
-
-Repo ini tidak mengimplementasikan integrasi WhatsApp secara langsung; bagian ini hanya dokumentasi alur umum.
 
 ## Menjalankan Tes
 
@@ -140,27 +127,3 @@ pytest -q
 
 Struktur test ada di folder `tests/` dengan subfolder `unit/` dan `functional/`.
 
-## Catatan Pengembangan & Deploy
-
-- Gunakan project Supabase khusus untuk penyimpanan — buat tabel sesuai yang direferensikan di `database.py` (users, quiz_sessions, questions, quiz_questions, quiz_answers, performance_summary, study_sessions, study_intervals, study_summaries).
-- Untuk deploy bot jangka panjang, set environment variable di host/server (atau gunakan secrets management) daripada file `.env` di produksi.
-
-## Troubleshooting
-
-- Bot gagal start: pastikan `DISCORD_TOKEN` sudah diisi dan valid.
-- Error AI: cek `OPENAI_API_KEY` (atau provider lain) dan pastikan tidak kena rate limit.
-- Error database: pastikan `SUPABASE_URL` / `SUPABASE_KEY` benar dan tabel sudah dibuat dengan kolom yang sesuai.
-
-## Kontribusi
-
-Pull request dan issue sangat diterima. Jangan commit data rahasia.
-
-## Lisensi
-
-Project ini belum memiliki lisensi eksplisit. Tambahkan file lisensi (misal MIT) jika ingin dipublikasikan secara open source.
-
----
-
-Jika Anda ingin, saya bisa:
-- menambah bagian README cara membuat bot Discord dan menambahkannya ke server;
-- membuat draft SQL migration untuk tabel Supabase yang direferensikan di `quiz_bot/database.py`.
