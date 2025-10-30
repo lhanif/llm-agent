@@ -32,7 +32,7 @@ class AIService:
         """
         
         try:
-            chat_completion = self.groq_client.chat.completions.create(
+            chat_completion = await self.groq_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile",
                 response_format={"type": "json_object"}
@@ -119,7 +119,7 @@ class AIService:
         """
 
         try:
-            chat_completion = self.groq_client.chat.completions.create(
+            chat_completion = await self.groq_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="llama-3.3-70b-versatile",
             )
@@ -272,7 +272,7 @@ class AIService:
         """
 
         try:
-            chat_completion = self.groq_client.chat.completions.create(
+            chat_completion = await self.groq_client.chat.completions.create(
                 messages=[{"role": "user", "content": ai_prompt}],
                 model="llama-3.3-70b-versatile",
                 response_format={"type": "json_object"}

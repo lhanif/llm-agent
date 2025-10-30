@@ -3,3 +3,7 @@ python-dotenv
 requests
 groq
 httpx
+pytest
+pytest-asyncio
+pytest-mock
+coverage

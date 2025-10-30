@@ -52,8 +52,12 @@ class QuizSession:
         """Get final quiz statistics."""
         end_time = datetime.datetime.now()
         total_duration = (end_time - self.start_time).total_seconds()
-        percentage_score = (self.score / len(self.questions)) * 100
-        avg_duration_per_q = total_duration / len(self.questions)
+        if len(self.questions) == 0:
+            percentage_score = 0
+            avg_duration_per_q = 0
+        else:
+            percentage_score = (self.score / len(self.questions)) * 100
+            avg_duration_per_q = total_duration / len(self.questions)
         
         return {
             "score": self.score,
