@@ -1,7 +1,8 @@
 
-## llm-agent — Asisten Belajar & Kuis Pribadi
+## Ilham : Personal Learning Assistant
 
-Bot Discord ringan untuk membantu belajar, membuat kuis, dan merancang sesi belajar menggunakan AI serta menyimpan data ke Supabase.
+Eduardus Bagus Wicaksono (22/493128/TK/53996)
+Luthfi Hanif (22/497890/TK/54589)
 
 Repositori ini berisi grup perintah Discord (`/ilham`) untuk workflow kuis dan belajar, wrapper layanan AI, serta layer penyimpanan sederhana.
 
