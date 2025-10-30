@@ -113,6 +113,9 @@ Catatan:
 
 ![Arsitektur placeholder](./assets/image.png)
 
+## DEMO
+[![Tonton demo di YouTube](https://img.youtube.com/vi/pFTc4dEKhDY/0.jpg)](https://youtu.be/pFTc4dEKhDY)
+
 
 
 ## Menjalankan Tes
