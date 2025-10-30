@@ -112,7 +112,7 @@ Catatan:
 
 ## Arsitektur Sistem
 
-![Arsitektur placeholder](assets\image.png)
+![Arsitektur placeholder](./assets/image.png)
 
 
 
